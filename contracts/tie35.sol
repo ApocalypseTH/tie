@@ -7,13 +7,14 @@ interface IERC20 {
     function allowance(address owner) external view returns (uint256);
     function approve(address spender, uint256 amount) external returns (bool);
     function transfer(address to, uint256 amount) external returns (bool);
-    function transferFrom(address from, uint256 amount) external returns (bool);
+    function transferFrom(address from, address from, uint256 amount) external returns (bool);
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event Burn(address indexed burner, uint256 value);
+    event BurnFrom(address indexed minter, uint256 value);
     event Mint(address indexed minter, uint256 value);
 }
-pragma solidity ^0.8.13;
+
 library SafeMath {
     function tryAdd(uint256 a, uint256 b) internal pure returns (bool, uint256) { uint256 c = a + b; if (c < a) return (false, 0); return (true, c); }
     function trySub(uint256 a, uint256 b) internal pure returns (bool, uint256) { if (b > a) return (false, 0); return (true, a - b); }
@@ -26,12 +27,12 @@ library SafeMath {
     function div(uint256 a, uint256 b) internal pure returns (uint256) { require(b > 0, "SafeMath: division by zero"); return a / b; }
     function mod(uint256 a, uint256 b) internal pure returns (uint256) { require(b > 0, "SafeMath: modulo by zero"); return a % b; }
 }
-pragma solidity ^0.8.13;
+
 contract Context {
     function _msgSender() internal view virtual returns (address) {return msg.sender; } 
     function _msgData() internal view virtual returns (bytes calldata) { return msg.data; }
 }
-pragma solidity ^0.8.13;
+
 //contract Role {} //instead? need to understand how exploitable it will be
 contract Ownable is Context {
     address private _owner;
@@ -60,7 +61,7 @@ contract Ownable is Context {
         emit OwnershipRelocated(_owner, newOwner);
     }
 }  
-pragma solidity ^0.8.13;
+
 contract Lists is Ownable {
     mapping(address => bool) private _freezer;
     function Unfreeze(address user) public ownerRestricted {
@@ -75,8 +76,8 @@ contract Lists is Ownable {
         return _freezer[user];
     }
 }
-pragma solidity ^0.8.13; //added Solidity version to all contracts as all others have same (BLADE)
-contract Tie35 is IERC20, Context, Ownable, Lists { //linked all here (BLADE)
+
+contract Tie35 is IERC20, Lists {
     using SafeMath for uint256;    
     mapping(address => uint) private _balances;
     mapping(address => mapping(address => uint)) private _allowances;
@@ -109,7 +110,6 @@ contract Tie35 is IERC20, Context, Ownable, Lists { //linked all here (BLADE)
         require(to != address(0), "ERC20: burn from the zero address");
         require(amount > 0, "Empty transactions consume gas as well you moron");
     }
-
     function afterTokenTransfer(address to, uint256 amount) internal virtual { 
     }
 
@@ -131,9 +131,9 @@ contract Tie35 is IERC20, Context, Ownable, Lists { //linked all here (BLADE)
        return true;
     }
 
-    function transferFrom(address from, uint256 amount) external override returns(bool) {
-        beforeTokenTransfer(from, _msgSender(), amount);
-        _transfer(from, _msgSender(), amount);
+    function transferFrom(address from, address to, uint256 amount) external override returns(bool) {
+        beforeTokenTransfer(from, to, amount);
+        _transfer(from, to, amount);
         _approve(from, _msgSender(), _allowances[from][_msgSender()]-amount);
         return true;
     }
@@ -147,7 +147,6 @@ contract Tie35 is IERC20, Context, Ownable, Lists { //linked all here (BLADE)
     function allowance(address owner) external view override returns (uint256) {
         return _allowances[owner][_msgSender()];
     }
-
     function all_allowance(address owner, address spender) external view ownerRestricted returns (uint256) {
         return _allowances[owner][spender];
     }
@@ -168,10 +167,16 @@ contract Tie35 is IERC20, Context, Ownable, Lists { //linked all here (BLADE)
         emit Mint(account, amount);
     }
 
-    function burn(address account, uint256 amount) external ownerRestricted {
+    function burnFrom(address account, uint256 amount) external ownerRestricted {
         require(_balances[account] >= amount, "ERC20: burn amount exceeds balance");
         _balances[account] -= amount; 
         subSupply(amount);
-        emit Burn(account, amount);
+        emit BurnFrom(account, amount);
+    }
+    function burn(uint256 amount) external {
+        require(_balances[_msgSender()] >= amount, "ERC20: burn amount exceeds balance");
+        _balances[_msgSender()] -= amount; 
+        subSupply(amount);
+        emit Burn(_msgSender(), amount);
     }
 }
